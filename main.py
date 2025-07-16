@@ -11,6 +11,17 @@ import keyboards
 from custom_filters import button_filter, inline_button_filter
 from weather import get_current_weather, get_forecast
 from random_cat import get_random_cat
+from database import Database
+
+
+class Client(Client):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.database = Database()
+
+    def stop(self, *args, **kwargs):
+        self.database.close()
+        return super().stop(*args, **kwargs)
 
 
 bot = Client(
@@ -22,6 +33,11 @@ bot = Client(
 
 @bot.on_message(filters=filters.command("start") | button_filter(buttons.back_button))
 async def start_command(client: Client, message: Message):
+    user = client.database.get_user(message.from_user.id)
+    print(user.__dict__ if user else None)
+    if user is None:
+        client.database.create_user(message.from_user.id)
+
     await message.reply(
         "Привет! Я бот, который умеет считать и показывать время.\n"
         f"Нажми на кнопку {buttons.help_button.text} для получения списка команд.",
