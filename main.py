@@ -2,7 +2,7 @@ import time
 import random
 import operator
 
-from pyrogram import Client, filters
+from pyrogram import filters
 from pyrogram.types import Message, CallbackQuery, InputMediaPhoto
 
 import config
@@ -12,9 +12,10 @@ from custom_filters import button_filter, inline_button_filter
 from weather import get_current_weather, get_forecast
 from random_cat import get_random_cat
 from database import Database
+from pyrogram import Client
 
 
-class Client(Client):
+class MyBot(Client):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.database = Database()
@@ -24,36 +25,38 @@ class Client(Client):
         return super().stop(*args, **kwargs)
 
 
-bot = Client(
+bot = MyBot(
     api_id=config.API_ID,
     api_hash=config.API_HASH,
     bot_token=config.BOT_TOKEN,
     name="my_cool_bot"
 )
 
-@bot.on_message(filters=filters.command("start") | button_filter(buttons.back_button))
-async def start_command(client: Client, message: Message):
+
+@bot.on_message(filters.command("start") | button_filter(buttons.back_button))
+async def start_command(client: MyBot, message: Message):
     user = client.database.get_user(message.from_user.id)
-    print(user.__dict__ if user else None)
     if user is None:
         client.database.create_user(message.from_user.id)
 
     await message.reply(
-        "Привет! Я бот, который умеет считать и показывать время.\n"
+        "Привет! Я бот, который умеет считать, показывать время, погоду и котиков!\n"
         f"Нажми на кнопку {buttons.help_button.text} для получения списка команд.",
         reply_markup=keyboards.main_keyboard
     )
 
-@bot.on_message(filters=filters.command('time') | button_filter(buttons.time_button))
-async def time_command(client: Client, message: Message):
+
+@bot.on_message(filters.command("time") | button_filter(buttons.time_button))
+async def time_command(client: MyBot, message: Message):
     current_time = time.strftime("%H:%M:%S")
     await message.reply(
         f"Текущее время: {current_time}",
         reply_markup=keyboards.main_keyboard
     )
 
-@bot.on_message(filters=filters.command("calc"))
-async def calc_command(client: Client, message: Message):
+
+@bot.on_message(filters.command("calc"))
+async def calc_command(client: MyBot, message: Message):
     ops = {
         "+": operator.add, "-": operator.sub,
         "*": operator.mul, "/": operator.truediv,
@@ -62,54 +65,63 @@ async def calc_command(client: Client, message: Message):
     if len(message.command) != 4:
         return await message.reply(
             "Неверное количество аргументов\n"
-            "Пример использования:\n"
-            "/calc 1 + 2\n"
+            "Пример: /calc 5 * 7"
         )
 
-    _, left, op, right = message.command
-    op = ops.get(op)
+    _, left, op_symbol, right = message.command
+    op = ops.get(op_symbol)
+    try:
+        left = float(left)
+        right = float(right)
+    except ValueError:
+        return await message.reply("Аргументы должны быть числами")
+
     if op is None:
         return await message.reply("Неизвестный оператор")
-    if not left.isdigit() or not right.isdigit():
-        return await message.reply("Аргументы должны быть числами")
-    left, right = int(left), int(right)
-    await message.reply(f"Результат: {op(left, right)}")
+
+    result = op(left, right)
+    await message.reply(f"Результат: {result}")
 
 
-@bot.on_message(filters=filters.command("help") | button_filter(buttons.help_button))
-async def help_command(client: Client, message: Message):
-    commands = await client.get_bot_commands()
-    text_commands = "Список доступных команд:\n\n"
-    for command in commands:
-        text_commands += f"/{command.command} - {command.description}\n"
-        await message.reply(
-            text_commands,
-            reply_markup=keyboards.main_keyboard
-        )
+@bot.on_message(filters.command("help") | button_filter(buttons.help_button))
+async def help_command(client: MyBot, message: Message):
+    text_commands = (
+        "Список доступных команд:\n\n"
+        "/start - Перезапустить бота\n"
+        "/time - Узнать текущее время\n"
+        "/calc - Калькулятор (пример: /calc 2 + 2)\n"
+        "/weather - Погода в вашем городе\n"
+        "/setcity - Установить свой город\n"
+        "/cats - Получить случайного котика\n"
+        "/help - Показать это сообщение\n"
+    )
+    await message.reply(text_commands, reply_markup=keyboards.main_keyboard)
 
-@bot.on_message(filters=filters.command("setting") | button_filter(buttons.settings_button))
-async def settings_command(client: Client, message: Message):
-        await message.reply(
-            "Настройки",
-            reply_markup=keyboards.settings_keyboard
-        )
 
-@bot.on_message(filters=filters.command("weather") | button_filter(buttons.weather_button))
-async def weather_command(client: Client, message: Message):
-    if message.command and len(message.command) > 1:
-        city = message.command[1]
-    else:
-        city = "Москва"
-
+@bot.on_message(filters.command("weather") | button_filter(buttons.weather_button))
+async def weather_command(client: MyBot, message: Message):
+    user = client.database.get_user(message.from_user.id)
+    city = user.city or "Москва"
     weather = get_current_weather(city)
     await message.reply(
         weather,
         reply_markup=keyboards.weather_inline_keyboard
     )
 
+
+@bot.on_message(filters.command("setcity"))
+async def set_city_command(client: MyBot, message: Message):
+    if len(message.command) < 2:
+        return await message.reply("Пример: /setcity Санкт-Петербург")
+    city = " ".join(message.command[1:])
+    client.database.set_city(message.from_user.id, city)
+    await message.reply(f"Город успешно установлен: {city}")
+
+
 @bot.on_callback_query(filters=inline_button_filter(buttons.weather_current_inline_button))
-async def weather_current_inline_button_callback(client: Client, query: CallbackQuery):
-    city = "Москва"
+async def weather_current_inline_button_callback(client: MyBot, query: CallbackQuery):
+    user = client.database.get_user(query.from_user.id)
+    city = user.city or "Москва"
     weather = get_current_weather(city)
     if weather == query.message.text:
         return
@@ -118,26 +130,22 @@ async def weather_current_inline_button_callback(client: Client, query: Callback
         reply_markup=keyboards.weather_inline_keyboard
     )
 
+
 @bot.on_callback_query(filters=inline_button_filter(buttons.weather_forecast_inline_button))
-async def weather_forecast_inline_button_callback(client: Client, query: CallbackQuery):
-    city = "Москва"
-    weather = get_forecast(city)
-    if weather == query.message.text:
+async def weather_forecast_inline_button_callback(client: MyBot, query: CallbackQuery):
+    user = client.database.get_user(query.from_user.id)
+    city = user.city or "Москва"
+    forecast = get_forecast(city)
+    if forecast == query.message.text:
         return
     await query.message.edit_text(
-        weather,
+        forecast,
         reply_markup=keyboards.weather_inline_keyboard
     )
 
-@bot.on_message(filters=filters.command("change_city") | button_filter(buttons.change_city_button))
-async def weather_command(client: Client, message: Message):
-        await message.reply(
-            "Я пока не умею, но скоро научусь",
-            reply_markup=keyboards.settings_keyboard
-        )
 
-@bot.on_message(filters=filters.command("cats") | button_filter(buttons.cats_button))
-async def cats_command(client: Client, message: Message):
+@bot.on_message(filters.command("cats") | button_filter(buttons.cats_button))
+async def cats_command(client: MyBot, message: Message):
     cat = get_random_cat()
     await client.send_photo(
         chat_id=message.chat.id,
@@ -145,16 +153,18 @@ async def cats_command(client: Client, message: Message):
         reply_markup=keyboards.cats_inline_keyboard
     )
 
+
 @bot.on_callback_query(filters=inline_button_filter(buttons.cats_random_inline_button))
-async def cats_random_inline_button_callback(client: Client, query: CallbackQuery):
+async def cats_random_inline_button_callback(client: MyBot, query: CallbackQuery):
     cat = get_random_cat()
     await query.message.edit_media(
         media=InputMediaPhoto(cat),
         reply_markup=keyboards.cats_inline_keyboard,
     )
 
+
 @bot.on_message()
-async def echo(client: Client, message: Message):
+async def echo(client: MyBot, message: Message):
     text = message.text
     if random.choice([True, False]):
         await message.reply(text)
@@ -163,4 +173,3 @@ async def echo(client: Client, message: Message):
 
 
 bot.run()
-

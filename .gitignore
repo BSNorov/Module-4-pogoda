@@ -1,0 +1,15 @@
+# IDE
+.idea/
+
+# Byte-compiled
+__pycache__/
+*.pyc
+
+# Virtual environment
+.venv/
+
+# Databases / sessions
+*.db
+*.sqlite
+*.session
+

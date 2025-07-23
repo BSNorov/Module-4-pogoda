@@ -1,60 +1,49 @@
-import datetime                                       # для работы с датой и временем
-
-import pyowm.commons.exceptions                       # ошибки OWM
-import pytz                                           # для работы с часовыми поясами
-from pyowm.owm import OWM                             # класс для работы с API
-from pyowm.utils.config import get_default_config     # конфигурация
-from pyrogram import emoji                            # эмодзи
-
-import config                                         # конфиги
-
+import datetime
+import pyowm.commons.exceptions
+import pytz
+from pyowm.owm import OWM
+from pyowm.utils.config import get_default_config
+from pyrogram import emoji
+import config
 
 def get_omw_client() -> OWM:
-    owm_config = get_default_config()    # получаем стандартную конфигурацию
-    owm_config["language"] = "ru"        # меняем язык на русский
+    owm_config = get_default_config()
+    owm_config["language"] = "ru"
+    return OWM(api_key=config.OWM_KEY, config=owm_config)
 
-    return OWM(                          # создаем клиент OWM
-        api_key=config.OWM_KEY,          # передаем ключ
-        config=owm_config                # передаем конфигурацию
-    )
-
-
-client = get_omw_client()    # создаем клиент OWM
+client = get_omw_client()
 
 weather_emojis = {
-    'Thunderstorm': emoji.CLOUD_WITH_LIGHTNING_AND_RAIN,    # Гроза
-    'Drizzle': emoji.UMBRELLA_WITH_RAIN_DROPS,              # Морось
-    'Rain': emoji.CLOUD_WITH_RAIN,                          # Дождь
-    'Snow': emoji.SNOWFLAKE,                                # Снег
-    'Clear': emoji.SUN,                                     # Ясно
-    'Clouds': emoji.CLOUD,                                  # Облачно
+    'Thunderstorm': emoji.CLOUD_WITH_LIGHTNING_AND_RAIN,
+    'Drizzle': emoji.UMBRELLA_WITH_RAIN_DROPS,
+    'Rain': emoji.CLOUD_WITH_RAIN,
+    'Snow': emoji.SNOWFLAKE,
+    'Clear': emoji.SUN,
+    'Clouds': emoji.CLOUD,
 }
-
 
 def get_current_weather(city: str) -> str:
     mgr = client.weather_manager()
-
     try:
         obs = mgr.weather_at_place(city)
     except pyowm.commons.exceptions.NotFoundError:
         return "Не найден город!"
 
-    w = obs.weather                                       # получаем погоду
-    status = w.detailed_status                            # получаем статус
-    weather_emoji = weather_emojis.get(w.status, None)    # получаем эмодзи
-    temp = w.temperature('celsius')['temp']               # получаем температуру
-    temp_sign = '+' if temp > 0 else ''                   # получаем знак температуры
-    wind_speed = w.wind()['speed']                        # получаем скорость ветра
-    humidity = w.humidity                                 # получаем влажность
+    w = obs.weather
+    status = w.detailed_status
+    weather_emoji = weather_emojis.get(w.status, "")
+    temp = w.temperature('celsius')['temp']
+    temp_sign = '+' if temp > 0 else ''
+    wind_speed = w.wind()['speed']
+    humidity = w.humidity
 
-    message = f"Погода в городе {city}:\n\n"
-    message += f"{status.capitalize()} {weather_emoji}\n"
-    message += f"Температура: {temp_sign}{temp:.1f}°C {emoji.THERMOMETER}\n"
-    message += f"Ветер: {wind_speed:.1f} м/с {emoji.LEAF_FLUTTERING_IN_WIND}\n"
-    message += f"Влажность: {humidity}% {emoji.DROPLET}"
-
-    return message
-
+    return (
+        f"Погода в городе {city}:\n\n"
+        f"{status.capitalize()} {weather_emoji}\n"
+        f"Температура: {temp_sign}{temp:.1f}°C {emoji.THERMOMETER}\n"
+        f"Ветер: {wind_speed:.1f} м/с {emoji.LEAF_FLUTTERING_IN_WIND}\n"
+        f"Влажность: {humidity}% {emoji.DROPLET}"
+    )
 
 def get_forecast(city: str) -> str:
     mgr = client.weather_manager()
@@ -64,12 +53,12 @@ def get_forecast(city: str) -> str:
         return "Не найден город!"
 
     weather_list = forecaster.forecast.weathers
-
     dates = []
     today = datetime.datetime.now(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     for day in range(1, 4):
         for hour in range(0, 24, 6):
             dates.append(today + datetime.timedelta(days=day, hours=hour))
+
     weather_list = list(filter(lambda x: x.reference_time('date') in dates, weather_list))
 
     hours = {
@@ -88,10 +77,10 @@ def get_forecast(city: str) -> str:
             status = weather.detailed_status
             temp = weather.temperature('celsius')['temp']
             temp_sign = '+' if temp > 0 else ''
-            emoji_icon = weather_emojis.get(weather.status, None)
-            hour = weather.reference_time('date').hour
+            emoji_icon = weather_emojis.get(weather.status, '')
+            hour_label = weather.reference_time('date').hour
 
-            forecast += f"{hours[hour]}: {temp_sign}{temp:.0f}°C, {status} {emoji_icon}\n"
+            forecast += f"{hours[hour_label]}: {temp_sign}{temp:.0f}°C, {status} {emoji_icon}\n"
         forecast += "\n"
 
     return forecast
