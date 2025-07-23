@@ -1,9 +1,10 @@
 import datetime
-import pyowm.commons.exceptions
 import pytz
+import pyowm.commons.exceptions
 from pyowm.owm import OWM
 from pyowm.utils.config import get_default_config
 from pyrogram import emoji
+
 import config
 
 def get_omw_client() -> OWM:
@@ -27,60 +28,55 @@ def get_current_weather(city: str) -> str:
     try:
         obs = mgr.weather_at_place(city)
     except pyowm.commons.exceptions.NotFoundError:
-        return "Не найден город!"
+        return "❗ Город не найден."
+    except Exception:
+        return "⚠️ Не удалось получить погоду."
 
     w = obs.weather
-    status = w.detailed_status
-    weather_emoji = weather_emojis.get(w.status, "")
+    status = w.detailed_status.capitalize()
+    emoji_icon = weather_emojis.get(w.status, "")
     temp = w.temperature('celsius')['temp']
-    temp_sign = '+' if temp > 0 else ''
-    wind_speed = w.wind()['speed']
+    wind = w.wind()['speed']
     humidity = w.humidity
 
-    return (
-        f"Погода в городе {city}:\n\n"
-        f"{status.capitalize()} {weather_emoji}\n"
-        f"Температура: {temp_sign}{temp:.1f}°C {emoji.THERMOMETER}\n"
-        f"Ветер: {wind_speed:.1f} м/с {emoji.LEAF_FLUTTERING_IN_WIND}\n"
-        f"Влажность: {humidity}% {emoji.DROPLET}"
-    )
+    temp_sign = "+" if temp > 0 else ""
+    msg = f"🌤️ Погода в городе {city}:\n\n"
+    msg += f"{status} {emoji_icon}\n"
+    msg += f"🌡️ Температура: {temp_sign}{temp:.1f}°C\n"
+    msg += f"💨 Ветер: {wind:.1f} м/с\n"
+    msg += f"💧 Влажность: {humidity}%"
+    return msg
+
 
 def get_forecast(city: str) -> str:
     mgr = client.weather_manager()
     try:
-        forecaster = mgr.forecast_at_place(city, '3h')
+        forecast = mgr.forecast_at_place(city, '3h')
     except pyowm.commons.exceptions.NotFoundError:
-        return "Не найден город!"
+        return "❗ Город не найден."
+    except Exception:
+        return "⚠️ Ошибка при получении прогноза."
 
-    weather_list = forecaster.forecast.weathers
-    dates = []
-    today = datetime.datetime.now(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-    for day in range(1, 4):
-        for hour in range(0, 24, 6):
-            dates.append(today + datetime.timedelta(days=day, hours=hour))
+    weather_list = forecast.forecast.weathers
 
-    weather_list = list(filter(lambda x: x.reference_time('date') in dates, weather_list))
+    base_time = datetime.datetime.now(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    needed = [base_time + datetime.timedelta(days=d, hours=h)
+              for d in range(1, 4) for h in (0, 6, 12, 18)]
+    data = [w for w in weather_list if w.reference_time('date') in needed]
 
-    hours = {
-        0: f"{emoji.CRESCENT_MOON} Ночь",
-        6: f"{emoji.SUNRISE} Утро",
-        12: f"{emoji.SUN} День",
-        18: f"{emoji.SUNSET} Вечер",
-    }
-    day_names = ['Завтра', 'Послезавтра', 'Через 3 дня']
-    forecast = f"{emoji.CALENDAR} Прогноз в городе {city} на 3 дня:\n\n"
+    hours = {0: "🌙 Ночь", 6: "🌅 Утро", 12: "🌞 День", 18: "🌇 Вечер"}
+    day_titles = ['Завтра', 'Послезавтра', 'Через 3 дня']
 
-    for day in range(3):
-        forecast += f"{day_names[day]}:\n"
-        for hour in range(4):
-            weather = weather_list[day * 4 + hour]
-            status = weather.detailed_status
-            temp = weather.temperature('celsius')['temp']
-            temp_sign = '+' if temp > 0 else ''
-            emoji_icon = weather_emojis.get(weather.status, '')
-            hour_label = weather.reference_time('date').hour
-
-            forecast += f"{hours[hour_label]}: {temp_sign}{temp:.0f}°C, {status} {emoji_icon}\n"
-        forecast += "\n"
-
-    return forecast
+    msg = f"📆 Прогноз погоды в {city}:\n\n"
+    for i in range(3):
+        msg += f"{day_titles[i]}:\n"
+        for j in range(4):
+            w = data[i * 4 + j]
+            status = w.detailed_status
+            temp = w.temperature('celsius')['temp']
+            temp_sign = "+" if temp > 0 else ""
+            emoji_icon = weather_emojis.get(w.status, "")
+            hour = w.reference_time('date').hour
+            msg += f"{hours[hour]}: {temp_sign}{temp:.0f}°C, {status} {emoji_icon}\n"
+        msg += "\n"
+    return msg

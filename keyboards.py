@@ -6,26 +6,21 @@ main_keyboard = ReplyKeyboardMarkup(
         [buttons.time_button, buttons.weather_button, buttons.cats_button],
         [buttons.help_button, buttons.settings_button],
     ],
-    resize_keyboard=True
+    resize_keyboard=True,
 )
 
 settings_keyboard = ReplyKeyboardMarkup(
     keyboard=[
-        [buttons.change_city_button],
-        [buttons.back_button],
+        [buttons.change_city_button, buttons.back_button],
     ],
-    resize_keyboard=True
+    resize_keyboard=True,
 )
 
-weather_inline_keyboard = InlineKeyboardMarkup(
-    [
-        [buttons.weather_current_inline_button],
-        [buttons.weather_forecast_inline_button],
-    ]
-)
+weather_inline_keyboard = InlineKeyboardMarkup([
+    [buttons.weather_current_inline_button],
+    [buttons.weather_forecast_inline_button],
+])
 
-cats_inline_keyboard = InlineKeyboardMarkup(
-    [
-        [buttons.cats_random_inline_button],
-    ],
-)
+cats_inline_keyboard = InlineKeyboardMarkup([
+    [buttons.cats_random_inline_button],
+])
